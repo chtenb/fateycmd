@@ -1,22 +1,27 @@
+from logging import info, error, debug
+from tempfile import gettempdir
+
 from fate.document import Document
 from fate.completer import Completer
 from fate.navigation import position_to_coord, coord_to_position
-from logging import info, error, debug
-from .client import YcmdHandle, Event
-from tempfile import gettempdir
+
+from .ycmd_client import YcmdHandle, Event
+
 
 
 class YcmCompleter(Completer):
 
-    """Completer class for fate that uses the ycm engine."""
+    """Implementation of the Completer class for the ycm engine."""
 
     def __init__(self, doc):
-        Completer.__init__(self)
+        Completer.__init__(self, doc)
 
         info('Trying to start ycm server...')
         self.ycmhandle = YcmdHandle.StartYcmdAndReturnHandle()
+        #self.ycmhandle.WaitUntilReady()
         info('Ycm server started successfully...')
         doc.OnQuit.add(self.exit_ycmcompleter)
+        debug(self.ycmhandle.IsAlive())
 
     def exit_ycmcompleter(self):
         info('Trying to shut down ycm server...')
@@ -31,18 +36,16 @@ class YcmCompleter(Completer):
 
     def complete(self):
         doc = self.doc
+        debug(self.ycmhandle.IsReady())
         if self.ycmhandle.IsReady() and hasattr(doc, 'tempfile'):
-            # It may happen that the server was not ready for parsing, but is
-            # ready now
-            line, column = position_to_coord(
-                doc.mode.cursor_position(doc), doc.text)
+            # It may happen that the server was not ready for parsing, but is ready now
+            line, column = position_to_coord(doc.mode.cursor_position(doc), doc.text)
             info((line, column))
             result = doc.completer.SendCodeCompletionRequest(test_filename=doc.tempfile,
                                                              filetype=doc.filetype,
                                                              line_num=line,
                                                              column_num=column)
-            completions = [item['insertion_text']
-                           for item in result['completions']]
+            completions = [item['insertion_text'] for item in result['completions']]
             start_column = result['completion_start_column']
             start_position = coord_to_position(line, start_column, doc.text)
             debug('startcolumn: {}'.format(start_column))
